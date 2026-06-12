@@ -1,25 +1,186 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+author: "EMSRES"
+date: "2026-06-04"
+output: html_document
 ---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
 
 ## Loading and preprocessing the data
 
+First, the working directory is changed and the data is loaded:
+```{r}
+setwd("D:/Eva/PhD/Courses/ReproducibleResearch/Assignment1")
+data <- read.csv("activity.csv")
+```
 
-
+ 
 ## What is mean total number of steps taken per day?
 
+To compute and plot the total number of steps per day, the steps of all intervals of a date are summed, a histogram is plotted and the mean and median total number of steps are calculated.
+
+```{r}
+StepsPerDay <- aggregate(. ~ date, data = data, FUN = sum)
+
+StepsHistogram <- hist(
+    data$steps,
+    main = "Histogram of Steps",      # Title
+    xlab = "Number of Steps",         # X-axis label
+    ylab = "Frequency",               # Y-axis label
+    col = "grey",                     # Fill color
+    border = "black",                 # Border color
+    breaks = 10                       # Number of bins
+)
+
+meanStepsPerDay <- mean(StepsPerDay$steps)
+medianStepsPerDay <- median(StepsPerDay$steps)
+
+```
+
+Mean and median of the total number of steps are:
+```{r, echo=FALSE}
+print(paste("Mean: ", meanStepsPerDay))
+print(paste("Median: ", medianStepsPerDay))
+```
 
 
 ## What is the average daily activity pattern?
 
+To evaluate the average daily activity pattern, a sub-dataset is generated containing the steps per interval and the steps are averaged for each 5-minute interval across all days:
+```{r}
+library(dplyr)
+dataNoDate <- data %>% select(-date)
+StepsPerInterval <- aggregate(. ~ interval, data = dataNoDate, FUN = mean)
+```
+
+
+Afterwards, a time series plot is generated:
+```{r}
+library(ggplot2)
+library(lubridate)
+StepsTimeSeries <- ggplot(StepsPerInterval, aes(x = interval, y = steps)) +
+    geom_line(color = "steelblue") +
+    labs(
+        title = "Time Series Plot",
+        x = "Time interval",
+        y = "Mean steps"
+    )
+```
+
+
+The daily activity pattern looks on average as follows:
+```{r, echo=FALSE}
+plot(StepsTimeSeries)
+```
+
+The maximum number of steps on average is determined using the following code:
+```{r}
+max_point <- StepsPerInterval %>%
+    filter(steps == max(steps, na.rm = TRUE))
+```
+
+resulting in the following result:
+```{r, echo=FALSE}
+print(paste("The maximum number of steps is on average taken in interval", max_point$interval))
+```
+
 
 
 ## Imputing missing values
+Before imputing missing values, first, the total number of missing values in the dataset is calculated as follows:
+```{r}
+TotalMissingValues <- sum(is.na(data))
+```
+
+The total number of missing values is:
+```{r, echo=FALSE}
+TotalMissingValues
+```
+
+Then, the missing values are replaced by the average value on that date and stored as a new dataset:
+```{r}
+library(dplyr)
+dataImputed <- data %>% mutate(across(where(is.numeric), ~replace(., is.na(.), mean(., na.rm=TRUE))))
+```
+
+Finally, a histogram is generated, which depicts the total number of steps taken each day:
+```{r}
+StepsHistogramImputed <- hist(
+    dataImputed$steps,
+    main = "Histogram of Steps after Imputation",   # Title
+    xlab = "Number of Steps",                       # X-axis label
+    ylab = "Frequency",                             # Y-axis label
+    col = "grey",                                   # Fill color
+    border = "black",                               # Border color
+    breaks = 10                                     # Number of bins
+)
+```
+
+And the mean and median total number of steps taken per day is calculated and reported:
+```{r}
+StepsPerDayImputed <- aggregate(. ~ date, data = dataImputed, FUN = sum)
+meanStepsPerDayAfterImputation <- mean(StepsPerDayImputed$steps)
+medianStepsPerDayAfterImputation <- median(StepsPerDayImputed$steps)
+```
+
+Mean and median of the total number of steps are:
+```{r, echo=FALSE}
+print(paste("Mean:", meanStepsPerDayAfterImputation))
+print(paste("Median:", medianStepsPerDayAfterImputation))
+```
+
+In comparison, without imputation the following mean and median were obtained:
+```{r, echo=FALSE}
+print(paste("Mean:", meanStepsPerDay))
+print(paste("Median:", medianStepsPerDay))
+```
+
+Accordingly, the obtained mean stayed the same while the median differs depending on whether or not missing values are imputed.
 
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+To determine differences in activity patterns between weekdays and weekends, a new factor variable is generated categorizing each date based on whether it is a weekday or a weekend day:
+```{r}
+data$date <- as.Date(data$date, format = "%Y-%m-%d")
+data$weekday <- weekdays(data$date, abbreviate = FALSE)
+data$weekdayCategory <-
+  ifelse(weekdays(data$date) %in% c("Samstag", "Sonntag"), "Weekend", "Weekday")
+```
+
+
+Afterwards, the average number of steps is determined, averaged across all weekday days or weekend days:
+```{r}
+StepsPerIntervalWeektime <- data %>%
+  group_by(weekdayCategory, interval) %>%
+  summarise(
+    mean_steps = mean(steps, na.rm = TRUE),
+    first_interval = first(interval),
+    .groups = "drop_last"
+  )
+```
+
+
+And a time series plot is generated:
+```{r}
+TimeSeriesWeektime <- ggplot(StepsPerIntervalWeektime, aes(x = interval, y = mean_steps)) +
+    geom_line(color = "steelblue") +
+    facet_wrap(~ weekdayCategory, nrow = 2, scales = "fixed") +
+    labs(
+        title = "Panel Time Series Plot for Weekdays versus Weekend Days",
+        x = "Time interval",
+        y = "Mean steps"
+    )
+```
+
+The panel time series plot looks as follows:
+```{r, echo=FALSE}
+TimeSeriesWeektime
+```
+
